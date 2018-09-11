@@ -61,13 +61,13 @@ Where `<chart_path>` is a comma separated list of repository URLs and/or directo
 This would make it possible to manage dependency list with a build automation tool such as Gradle or Maven.
 Some use cases:
 1) Declare chart dependencies in maven/gradle files along other dependencies
-2) Declare project cross-dependencies that would automatically trigger Helm chart builds
-3) Greater integration with code, especially in the context of microservices. Each microservice comes with its own infrastructure, therefore it makes sense to have a project that holds both helm charts and, e.g. Java code:
+2) Declare project cross-platform dependencies that would automatically trigger Helm chart builds
+3) Improve integration with code, especially in the context of microservices. Each microservice comes with its own infrastructure, therefore it makes sense to have a project that holds both helm charts and, e.g. Java code:
 
 ```
 project/
  src/
-   helm/ - charts here
+   helm/ - helm charts here
    main/ - java stuff
  ```
 
