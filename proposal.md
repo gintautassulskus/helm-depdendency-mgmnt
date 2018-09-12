@@ -74,7 +74,7 @@ helmRepositories {
 }
 ```
 
-3) The declared chart dependencies then could automatically trigger Helm chart builds in other projects.
+3) The declared chart dependencies then could automatically trigger other projects containing Helm charts:
 
 ```
 helmRepositories {
