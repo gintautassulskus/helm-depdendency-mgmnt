@@ -1,99 +1,88 @@
 ## Proposal: Chart Packaging System Improvements
 
+#### Motivation
+
+In Helm v2, charts are uniquely identified using a combination of three properties: chart name, chart version and repository - `name:version:repository`.
+The inclusion of the `repository` presents several implications that may potentially hinder future improvements and management of Helm ecosystem:
+
+1) No built-in vendor distinction. Take for example identically named apache `kafka` and bitnami `kafka` charts. Both have the same `name` and their `version`'s can overlap. They are uniquely distinguished only by their `repository` . Consequentially, there is no way to store both charts in the same, e.g. private, repository. The alternative is to rename the charts as `kafka-bitnami` and `kafka-apache`, but this non-standardised and non-enforced vendoring may potentially cause even more confusion in the community;
+
+2) Repositories may move or experience downtime. Since chart idnetification dependends on the `repository` property, chart dependency resolution is susceptible to changes of the repsotory address and communication protocol (the hardcoded http/https) - the changes to the repository will have to be reflected in the chart and its nested dependencies;
+
+3) Repository outages cannot be worked around with mirror servers due to hardcoded `repository` address in the requriements.yaml;
+
+4) Explicit file system path usage should be discouraged - it enforces rigid project structures that are difficult to maintain and does not promote reusability, especially across multi-project setups.
+
+5) Repositories must be declared twice: in requirements.yaml and added as a helm repository;
+
+The multi-level nested chart scenarios typically depend on a greater number of charts and therefore are more likely to face the aforementioned issues.
+
+A similar issue pertaining to `respository` identifier was raised in docker community:
+https://forums.docker.com/t/working-with-private-registry-image-names-must-contain-port-number/3654
+
+The following sections make up a proposal to address the above.
+
 #### Versioning System
 
-At the moment, Helm charts are uniquely identified by two properties - their name and version. The Helm community could potentially benefit from adopting a Maven-like convention to name Helm charts. The naming convention is comprised of four elements (see below), where `group-id` specifies the project and `artifact-id` is the chart name; `<classifier-id>` is optional and can be left unimplemented for the future use:
+The Helm community could potentially benefit from adopting a Maven-like convention to uniquely identify Helm charts. The naming convention is comprised of four elements (see below), where `group` specifies the project/vendor and `name` is the chart name; `<classifier>` is optional and can be left unimplemented for the future use:
 
-```
-<group-id>:<artifact-id>:<classifier-id>:<version>
-```
-
-Consider the following use-cases:
-1) Uniquely identifying a chart with different configurations to be used for two different projects:
-```
-com.project1:kafka:1.2.3
-com.project2:kafka:4.5.6
+```xml
+<group>:<artifact>:<classifier>:<version>
 ```
 
-These charts can then be stored in a local helm repository without name clash.
-
-2) More flexible chart naming. Extended charts could have the same names as the original chart:
-
+The proposed identification makes it possible to uniquely identify a chart from two different vendors:
 ```
-com.helm.repository.project:kafka:1.0.0
+com.apache:kafka:1.2.3
+com.bitnami:kafka:1.2.3
 ```
 
-This is useful if the internal chart retains key elements from the original chart but differs in configuration that is required accross one or more projects.
+Locally customised/extended chart retains the `name` that best describes the contents of the chart`:
+
+```
+com.custom:kafka:1.2.3
+```
+
+These charts can then be stored in a local Helm repository without a clash.
+
 
 #### Decoupling Chart from Repository; Caching
 
-Arguments to separate chart dependency and repository management:
+Replacing `repository` with `group` in the charts as proposed in the previous section simplifies chart dependency management.
 
-1) Most of the charts originate only from two repositories: stable and staging. Hence the repetition.
-2) Repositories should not be specified inside the charts:
-   2.1) repositories may move or experience downtime. E.g. dead links would slow down and complicate the process of dependency resolution.
-   2.2) Changes to the repository must be reflected in the chart and its nested dependencies.
-3) Explicit file system path usage should be discouraged  - it enforces rigid project structures that are difficult to maintain and reuse, especially across multi-project setups.
-
-The requirements.yaml file would contain only the list of dependencies:
-```
+For example, the `requirements.yaml` file then would no longer store repository information and would be concerned only with chart identification:
+```yaml
 dependencies:
-- id: com.project1:kafka:1.2.3
-- id: com.project2:kafka:4.5.6
+- group: com.apache
+  name: kafka
+  version: 1.2.3
+- id: com.bitnami
+  name kafka
+  version: 1.2.3
   alias: still_works
   enabled: true
 ```
 
-Helm would firstly look for the dependencies in a local repository located in `~/.helm/repository`. For example, one of the kafka chart examples mentioned earlier would be stored in:
+Helm would firstly look for the dependencies in a local repository/cache located in `~/.helm/repository`. For example, one of the kafka chart examples mentioned earlier would be stored in:
 ```
-~/.helm/repository/com/project1/kafka/1.2.3/
+~/.helm/repository/com/apache/kafka/1.2.3/
 ```
 The directory would contain:
 ```
  kafka-1.2.3.tar.gz - chart archive
- kafka-1.2.3.tar.gz.sha1 - checksum for our chart
+ kafka-1.2.3.tar.gz.sha1 - checksum for the chart
  kafka-1.2.3.pom - chart descriptor, e.g. what other dependencies it might require
- kafka-1.2.3.pom.sha1 - chart descriptor check sum
+ kafka-1.2.3.pom.sha1 - chart descriptor checksum
 ```
 
-If the dependency in question is not found locally, Helm would look for it in remote repositories. The list of external repositories would be defined either centrally or passed as a parameter:
+If the dependency in question is not found locally, Helm would look for it in specified locations and/or remote repositories. The list of external repositories would be defined either centrally as today or passed as a parameter:
 
 ```
-helm package -d <chart_out> <chart_input> -cr <chart_repository>
-```
-Where `<chart_repository>` is a comma separated list of repository URLs and/or directories containing charts.
-
-This would make it possible to manage dependency list with a build automation tool such as Gradle or Maven.
-Some use cases:
-1) Declare chart dependencies in maven/gradle files along other dependencies, e.g. gradle depednecy:
-
-```
-helmRepositories {
-    repository "stable"
-    repository "companyRepo"
-}
+helm package -d <chart_out> <chart_input> --chart-path <path_to_charts>
 ```
 
-3) The declared chart dependencies then could automatically trigger other projects containing Helm charts:
-
-```
-helmRepositories {
-    repository project(":some:grdle:sub-project")
-}
-```
-
-4) Improve integration with code, especially in the context of microservices. Each microservice comes with its own infrastructure, therefore it makes sense to have a project that holds both helm charts and, e.g. Java code:
-
-```
-project/
- src/
-   helm/ - helm charts here
-   main/ - java stuff
- ```
-
-Such project structure then allows sharing common properties between the infrastructure and the code, e.g. database address and port. Linking infrastructure to code can finally be fully automated!
+Where `<path_to_charts>` is a comma separated list repository URLs and/or directories/files containing charts.
 
 #### Better `Staging` and `Stable` Chart Separation
 
-At the moment there is no way to tell wether a downloaded chart's status is `stable` or `staging`.
-Staging chart versions could be appended with `-STAGING`.
+At the moment there is no way to tell whether chart is `stable` or `innvubating`.
+Again, we could borrow the convention from Maven and append staging chart's `name` with `-STAGING`.
