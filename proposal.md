@@ -7,13 +7,11 @@ The inclusion of the `repository` presents several implications that may potenti
 
 1) No built-in vendor distinction. Take for example identically named apache `kafka` and bitnami `kafka` charts. Both have the same `name` and their `version`'s can overlap. They are uniquely distinguished only by their `repository` . Consequentially, there is no way to store both charts in the same, e.g. private, repository. The alternative is to rename the charts as `kafka-bitnami` and `kafka-apache`, but this non-standardised and non-enforced vendoring may potentially cause even more confusion in the community;
 
-2) Repositories may move or experience downtime. Since chart idnetification dependends on the `repository` property, chart dependency resolution is susceptible to changes of the repsotory address and communication protocol (the hardcoded http/https) - the changes to the repository will have to be reflected in the chart and its nested dependencies;
+2) Repositories may move or experience downtime. Chart dependency resolution is susceptible to changes of the repsotory address and communication protocol (the hardcoded http/https) - the changes to the repository will have to be reflected in the chart and its nested dependencies;
 
-3) Repository outages cannot be worked around with mirror servers due to hardcoded `repository` address in the requriements.yaml;
+3) Explicit path usage should be discouraged - it enforces rigid project structures that are difficult to maintain and does not promote reusability, especially across multi-project setups.
 
-4) Explicit file system path usage should be discouraged - it enforces rigid project structures that are difficult to maintain and does not promote reusability, especially across multi-project setups.
-
-5) Repositories must be declared twice: in requirements.yaml and added as a helm repository;
+4) Repositories at the moment must be declared twice: in requirements.yaml and added as a helm repository;
 
 The multi-level nested chart scenarios typically depend on a greater number of charts and therefore are more likely to face the aforementioned issues.
 
